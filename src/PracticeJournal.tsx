@@ -7,13 +7,16 @@ type Entry={id:string;date:string;drillId:string;successes:number;attempts:numbe
 type Practice={drills:Drill[];entries:Entry[]};
 const initial:Practice={drills:[],entries:[]};
 const dbp=openDB("cornhole-tournaments",1,{upgrade(db){if(!db.objectStoreNames.contains("app"))db.createObjectStore("app")}});
+const getOwnedBags=async()=>{const d=await(await dbp).get("app","data");return (d?.bags||[]) as {id:string;brand:string;model:string}[]};
 const id=()=>crypto.randomUUID();
 const fmt=(n:number)=>Number.isFinite(n)?n.toFixed(2):"—";
 export default function PracticeJournal(){
+ const [ownedBags,setOwnedBags]=useState<{id:string;brand:string;model:string}[]>([]);
  const [data,setData]=useState<Practice>(initial),[ready,setReady]=useState(false);
  const [name,setName]=useState(""),[metric,setMetric]=useState("Successful Shots"),[unit,setUnit]=useState("shots"),[mode,setMode]=useState<"ratio"|"number">("ratio"),[higher,setHigher]=useState(true);
  const [chosen,setChosen]=useState(""),[date,setDate]=useState(new Date().toISOString().slice(0,10)),[successes,setSuccesses]=useState(""),[attempts,setAttempts]=useState(""),[value,setValue]=useState(""),[bags,setBags]=useState(""),[notes,setNotes]=useState("");
  const [filter,setFilter]=useState(""),[editId,setEditId]=useState<string|null>(null);
+ useEffect(()=>{getOwnedBags().then(setOwnedBags).catch(console.error)},[]);
  useEffect(()=>{dbp.then(db=>db.get("app","practice")).then(x=>{if(x&&Array.isArray(x.drills)&&Array.isArray(x.entries))setData(x);setReady(true)}).catch(()=>setReady(true))},[]);
  useEffect(()=>{if(ready)dbp.then(db=>db.put("app",data,"practice")).catch(console.error)},[data,ready]);
  const drill=data.drills.find(d=>d.id===chosen);
@@ -35,7 +38,7 @@ export default function PracticeJournal(){
  <label>Practice Drill<select value={chosen} onChange={e=>{setChosen(e.target.value);setEditId(null)}} required><option value="">Select a drill</option>{data.drills.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
  <label>Date<input type="date" value={date} onChange={e=>setDate(e.target.value)} required/></label>
  {drill?.mode==="ratio"?<><label>Successful Attempts<input type="number" min="0" value={successes} onChange={e=>setSuccesses(e.target.value)} required/></label><label>Total Attempts<input type="number" min="1" value={attempts} onChange={e=>setAttempts(e.target.value)} required/></label></>:drill?<label>{drill.metric} ({drill.unit})<input type="number" step="any" value={value} onChange={e=>setValue(e.target.value)} required/></label>:null}
- <label>Bags Used<input value={bags} onChange={e=>setBags(e.target.value)} placeholder="Optional brand / model"/></label>
+ <label>Bags Used<select value={bags} onChange={e=>setBags(e.target.value)}><option value="">Select Bags (optional)</option>{ownedBags.map(b=><option key={b.id} value={b.brand+" "+b.model}>{b.brand} {b.model}</option>)}{bags&&!ownedBags.some(b=>b.brand+" "+b.model===bags)&&<option value={bags}>{bags} (previously recorded)</option>}</select></label>
  <label>Session Notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="What worked? What needs improvement?"/></label>
  </div><div className="flex"><button className="primary" disabled={!drill}>{editId?"Update Result":"Save Practice Result"}</button>{editId&&<button type="button" onClick={()=>setEditId(null)}>Cancel Edit</button>}</div></form>}</div>
  <div className="panel"><h2>My Practice Drills</h2><form onSubmit={addDrill}><div className="fields"><label>Drill Name<input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Airmail Accuracy" required/></label><label>Statistic Name<input value={metric} onChange={e=>setMetric(e.target.value)} placeholder="e.g. Airmails Made"/></label><label>Tracking Method<select value={mode} onChange={e=>setMode(e.target.value as "ratio"|"number")}><option value="ratio">Successes / Attempts (%)</option><option value="number">Single Numeric Result (e.g. PPR)</option></select></label>{mode==="number"&&<label>Unit<input value={unit} onChange={e=>setUnit(e.target.value)} placeholder="points, seconds, PPR…"/></label>}<label>Better Result<select value={higher?"higher":"lower"} onChange={e=>setHigher(e.target.value==="higher")}><option value="higher">Higher is better</option><option value="lower">Lower is better</option></select></label></div><button type="submit">+ Create Drill</button></form>
