@@ -32,7 +32,33 @@ function App(){
  const setF=(key:keyof typeof filters,v:string)=>setFilters(p=>({...p,[key]:v}));
  const addTournament=()=>{const x=blankTournament();change(d=>{d.tournaments.push(x);return d});setSelected(x.id);setPage("Tournaments")};
  const delTournament=(id:string)=>{if(!confirm("Move this tournament and its games to the Recycle Bin?"))return;change(d=>{const i=d.tournaments.findIndex(x=>x.id===id);if(i>=0)d.trash.push(...d.tournaments.splice(i,1));return d});setSelected(null)};
- const exportBackup=async()=>{const practice=await(await dbp).get("app","practice");const practiceRounds=await(await dbp).get("app","practiceRounds");const blob=new Blob([JSON.stringify({...data,practice,practiceRounds},null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="cornhole-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(url)};
+ const exportBackup=async()=>{try{
+  const db=await dbp;
+  const practice=await db.get("app","practice");
+  const practiceRounds=await db.get("app","practiceRounds");
+  const allTournaments=data.tournaments.map(t=>{
+   const tournamentStats=summarize(t.games);
+   return {...t,tournamentPpr:tournamentStats.ppr,tournamentStats,
+    games:t.games.map(g=>({...g,calculatedStats:gameStats(g),calculatedCancellationScore:computedScore(g)})),
+    placementPercentiles:{
+     overall:placementPercent(t.placement.rank,t.placement.field),
+     division:placementPercent(t.placement.divisionRank,t.placement.divisionField),
+     bracket:placementPercent(t.placement.bracketRank,t.placement.bracketField)
+    }};
+  });
+  const practiceRoundStats=(practiceRounds||[]).map((s:{id:string;date:string;drill:string;bags:string;notes:string;rounds:{in:number;on:number;off:number}[]})=>{
+   const rounds=s.rounds||[],n=rounds.length,ins=rounds.reduce((a,r)=>a+r.in,0),ons=rounds.reduce((a,r)=>a+r.on,0),offs=rounds.reduce((a,r)=>a+r.off,0);
+   return {...s,calculatedStats:{rounds:n,ins,ons,offs,ppr:n?(ins*3+ons)/n:null,fourBaggers:rounds.filter(r=>r.in===4).length,inPercent:n?ins/(4*n)*100:null,onPercent:n?ons/(4*n)*100:null,offPercent:n?offs/(4*n)*100:null}};
+  });
+  const backup={...data,tournaments:allTournaments,practice,practiceRounds:practiceRoundStats,
+   calculatedStats:{career:summarize(data.tournaments.flatMap(t=>t.games)),tournamentCount:data.tournaments.length},
+   exportMetadata:{schema:"cornhole-complete-backup",schemaVersion:2,exportedAt:new Date().toISOString(),statistics:"Calculated from saved raw records; PPR uses finalized games with valid paired rounds. Null means unavailable."}};
+  const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="cornhole-complete-backup-"+new Date().toISOString().slice(0,10)+".json";
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ }catch(e){alert("Backup export failed: "+String(e))}
+ };
  const importBackup=async(file:File)=>{try{const d=JSON.parse(await file.text());if(d.version!==1||!Array.isArray(d.tournaments)||!Array.isArray(d.bags)||!Array.isArray(d.names)||!Array.isArray(d.trash)||!Array.isArray(d.deletedGames))throw Error("Invalid or unsupported backup");if(!confirm("Replace ALL current data with this backup? Export your existing data first."))return;if(d.practice&&Array.isArray(d.practice.drills)&&Array.isArray(d.practice.entries))await(await dbp).put("app",d.practice,"practice");if(Array.isArray(d.practiceRounds))await(await dbp).put("app",d.practiceRounds,"practiceRounds");setData(d);setSelected(null);alert("Backup restored. Reload the page to refresh the Practice Journal.")}catch(e){alert("Restore failed: "+String(e))}};
  const metric=(label:string,value:string)=> <div className="metric"><small>{label}</small><strong>{value}</strong></div>;
  const input=(label:string,value:string|number,fn:(s:string)=>void,type="text")=><label>{label}<input type={type} value={value} onChange={e=>fn(e.target.value)}/></label>;
