@@ -1,3 +1,4 @@
+import PracticeRounds from "./PracticeRounds";
 import React,{useEffect,useMemo,useState} from "react";
 import {openDB} from "idb";
 import {LineChart,Line,CartesianGrid,XAxis,YAxis,Tooltip,ResponsiveContainer} from "recharts";
@@ -28,6 +29,7 @@ export default function PracticeJournal(){
  const average=selectedDrill?.mode==="ratio"?(totalAttempts?fmt(totalSuccesses/totalAttempts*100)+"%":"—"):(entriesFor.length?fmt(entriesFor.reduce((a,e)=>a+e.value,0)/entriesFor.length)+" "+(selectedDrill?.unit||""):"—");
  const best=entriesFor.length?(selectedDrill?.mode==="ratio"?fmt(Math[selectedDrill.higher?"max":"min"](...entriesFor.map(e=>e.successes/e.attempts*100)))+"%":fmt(Math[selectedDrill?.higher?"max":"min"](...entriesFor.map(e=>e.value)))+" "+(selectedDrill?.unit||"")):"—";
  return <div>
+ <PracticeRounds/>
  <div className="panel"><h2>Record Practice</h2><p className="muted">Log results from your own drills. Practice records do not affect tournament statistics.</p>
  {data.drills.length===0?<p className="muted">Create your first drill below to start recording.</p>:<form onSubmit={saveEntry}><div className="fields">
  <label>Practice Drill<select value={chosen} onChange={e=>{setChosen(e.target.value);setEditId(null)}} required><option value="">Select a drill</option>{data.drills.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
